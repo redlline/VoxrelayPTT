@@ -1,4 +1,4 @@
-import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
+import Fastify, { FastifyRequest, FastifyReply, FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import jwt from '@fastify/jwt';
@@ -46,7 +46,7 @@ function validateEnv() {
     throw new Error('JWT_REFRESH_SECRET must be at least 32 characters long');
   }
 
-  if (process.env.COOKIE_SECRET.length < 32) {
+  if (process.env.COOKIE_SECRET!.length < 32) {
     throw new Error('COOKIE_SECRET must be at least 32 characters long');
   }
 
@@ -168,7 +168,7 @@ async function buildApp() {
   await app.register(wsRoutes);
 
   // Global error handler — structured JSON errors
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: FastifyError, request, reply) => {
     const statusCode = error.statusCode || 500;
     const message = statusCode === 500 && isProduction
       ? 'Internal server error'
