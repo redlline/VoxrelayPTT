@@ -23,7 +23,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -35,20 +35,20 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install dependencies
+      - name: Install Node.js dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Type check
-        run: pnpm --filter @voxrelay/api-gateway typecheck
+      - name: Type check media-sfu
+        run: pnpm --filter @voxrelay/media-sfu typecheck
 
-      - name: Lint
-        run: pnpm --filter @voxrelay/api-gateway lint 2>/dev/null || echo "lint skipped"
+      - name: Lint media-sfu
+        run: pnpm --filter @voxrelay/media-sfu lint 2>/dev/null || echo "lint skipped"
 
       - name: Unit tests
-        run: pnpm --filter @voxrelay/api-gateway test 2>/dev/null || echo "no unit tests"
+        run: pnpm --filter @voxrelay/media-sfu test 2>/dev/null || echo "no unit tests"
 
-      - name: Build API
-        run: pnpm --filter @voxrelay/api-gateway build
+      - name: Build media-sfu
+        run: pnpm --filter @voxrelay/media-sfu build
 
       - name: Build web app
         run: pnpm --filter @voxrelay/web build 2>/dev/null || echo "web build skipped"
@@ -67,11 +67,13 @@ jobs:
 
       - name: Build Docker images
         run: |
-          docker compose -p ptt build voxrelay-server web-gateway
+          docker compose -p ptt build auth-service channel-svc media-sfu web-gateway
 
       - name: Save images
         run: |
-          docker save ptt_voxrelay-server | gzip > /tmp/voxrelay-server.tar.gz
+          docker save ptt_auth-service | gzip > /tmp/auth-service.tar.gz
+          docker save ptt_channel-svc | gzip > /tmp/channel-svc.tar.gz
+          docker save ptt_media-sfu | gzip > /tmp/media-sfu.tar.gz
           docker save ptt_web-gateway | gzip > /tmp/web-gateway.tar.gz
 
       - name: Upload images to server
@@ -81,7 +83,7 @@ jobs:
           username: ${{ env.REMOTE_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ env.REMOTE_PORT }}
-          source: /tmp/voxrelay-server.tar.gz,/tmp/web-gateway.tar.gz
+          source: /tmp/auth-service.tar.gz,/tmp/channel-svc.tar.gz,/tmp/media-sfu.tar.gz,/tmp/web-gateway.tar.gz
           target: /tmp/
           strip_components: 1
 
@@ -113,36 +115,41 @@ jobs:
             cd ${{ env.COMPOSE_DIR }}
 
             echo "[1/6] Loading Docker images..."
-            docker load < /tmp/voxrelay-server.tar.gz || true
+            docker load < /tmp/auth-service.tar.gz || true
+            docker load < /tmp/channel-svc.tar.gz || true
+            docker load < /tmp/media-sfu.tar.gz || true
             docker load < /tmp/web-gateway.tar.gz || true
 
-            echo "[2/6] Recreating services..."
-            docker compose up -d --force-recreate voxrelay-server web-gateway
+            echo "[2/6] Recreating all services..."
+            docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
 
-            echo "[3/6] Waiting for health check (60s timeout)..."
-            HEALTHY=false
-            for i in $(seq 1 12); do
-              STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/health 2>/dev/null || echo "000")
-              if [ "$STATUS" = "200" ]; then
-                HEALTHY=true
-                echo "  Health check passed!"
-                break
+            echo "[3/6] Waiting for health checks (90s timeout)..."
+            for svc in auth-service:3001/health channel-svc:3002/health media-sfu:3003/health; do
+              echo "  Checking $svc..."
+              HEALTHY=false
+              for i in $(seq 1 12); do
+                HOST=$(echo $svc | cut -d: -f1)
+                PORT=$(echo $svc | cut -d: -f2 | cut -d/ -f1)
+                STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://$HOST:$PORT/health 2>/dev/null || echo "000")
+                if [ "$STATUS" = "200" ]; then
+                  HEALTHY=true
+                  echo "  $svc OK"
+                  break
+                fi
+                echo "  Attempt $i: $svc status=$STATUS, waiting 5s..."
+                sleep 5
+              done
+              if [ "$HEALTHY" = "false" ]; then
+                echo "[ROLLBACK] $svc health check failed! Rolling back..."
+                docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
+                exit 1
               fi
-              echo "  Attempt $i: status=$STATUS, waiting 5s..."
-              sleep 5
             done
-
-            if [ "$HEALTHY" = "false" ]; then
-              echo "[ROLLBACK] Health check failed! Rolling back..."
-              docker compose up -d --force-recreate voxrelay-server web-gateway
-              echo "[ROLLBACK] Previous images restored. Deployment FAILED."
-              exit 1
-            fi
 
             echo "[5/6] Running post-deploy backup..."
             bash scripts/backup.sh 2>/dev/null || true
 
             echo "[6/6] Cleaning up..."
-            rm -f /tmp/voxrelay-server.tar.gz /tmp/web-gateway.tar.gz
+            rm -f /tmp/auth-service.tar.gz /tmp/channel-svc.tar.gz /tmp/media-sfu.tar.gz /tmp/web-gateway.tar.gz
             docker image prune -f 2>/dev/null || true
             echo "Deployment complete!"

@@ -16,15 +16,16 @@ docker image prune -af || true
 docker builder prune -af || true
 
 echo "[4/8] Ensuring clean frontend build"
-rm -rf apps/web/dist services/api-gateway/dist
+rm -rf apps/web/dist services/media-sfu/dist
 
 echo "[5/8] Building frontend locally for nginx static serving"
 corepack enable >/dev/null 2>&1 || true
 pnpm install --frozen-lockfile
 pnpm --filter @voxrelay/web build
+pnpm --filter @voxrelay/media-sfu build
 
 echo "[6/8] Rebuilding services"
-docker compose build --no-cache voxrelay-server web-gateway
+docker compose build --no-cache auth-service channel-svc media-sfu web-gateway
 
 echo "[7/8] Starting stack"
 docker compose up -d

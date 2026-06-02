@@ -7,20 +7,20 @@ services:
       - ./apps/web/dist:/usr/share/nginx/html:ro
       - ./deploy/nginx/voxrelay.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - voxrelay-server
+      - auth-service
+      - channel-svc
+      - media-sfu
     mem_limit: 256m
     restart: unless-stopped
 
-  voxrelay-server:
+  auth-service:
     build:
-      context: .
-      dockerfile: services/api-gateway/Dockerfile
-      target: development
+      context: ./services/auth-service
+      dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-      - "40000-40100:40000-40100/udp"
+      - "3001:3001"
     environment:
-      NODE_ENV: staging
+      PORT: 3001
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: voxrelay_staging
@@ -29,8 +29,57 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      COOKIE_SECRET: ${COOKIE_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  channel-svc:
+    build:
+      context: ./services/channel-svc
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: voxrelay_staging
+      DB_USER: voxrelay
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  media-sfu:
+    build:
+      context: .
+      dockerfile: services/media-sfu/Dockerfile
+      target: development
+    ports:
+      - "3003:3003"
+      - "40000-40100:40000-40100/udp"
+    environment:
+      NODE_ENV: staging
+      PORT: 3003
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: voxrelay_staging
+      DB_USER: voxrelay
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       MEDIASOUP_LISTEN_IP: 0.0.0.0
       MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
       MEDIASOUP_MIN_PORT: 40000
@@ -53,8 +102,6 @@ services:
         condition: service_started
       minio:
         condition: service_started
-    env_file:
-      - .env
     restart: unless-stopped
 
   postgres:
