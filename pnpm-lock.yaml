@@ -197,6 +197,97 @@ importers:
         specifier: ^8.20.1
         version: 8.20.1
 
+  services/media-sfu:
+    dependencies:
+      '@fastify/compress':
+        specifier: ^8.3.1
+        version: 8.3.1
+      '@fastify/cookie':
+        specifier: ^11.0.0
+        version: 11.0.2
+      '@fastify/cors':
+        specifier: ^10.0.0
+        version: 10.1.0
+      '@fastify/helmet':
+        specifier: ^13.0.2
+        version: 13.0.2
+      '@fastify/jwt':
+        specifier: ^9.0.0
+        version: 9.1.0
+      '@fastify/multipart':
+        specifier: ^10.0.0
+        version: 10.0.0
+      '@fastify/rate-limit':
+        specifier: ^10.0.0
+        version: 10.3.0
+      '@fastify/swagger':
+        specifier: ^9.0.0
+        version: 9.7.0
+      '@fastify/swagger-ui':
+        specifier: ^5.0.0
+        version: 5.2.6
+      '@fastify/websocket':
+        specifier: ^11.0.0
+        version: 11.2.0
+      bcrypt:
+        specifier: ^5.1.0
+        version: 5.1.1
+      fastify:
+        specifier: ^5.2.0
+        version: 5.8.5
+      ioredis:
+        specifier: ^5.4.0
+        version: 5.10.1
+      mediasoup:
+        specifier: ^3.14.0
+        version: 3.19.22
+      mediasoup-client:
+        specifier: ^3.7.0
+        version: 3.20.0
+      minio:
+        specifier: ^8.0.0
+        version: 8.0.7
+      nanoid:
+        specifier: ^5.0.0
+        version: 5.1.11
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.9
+      prom-client:
+        specifier: ^15.1.3
+        version: 15.1.3
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@types/bcrypt':
+        specifier: ^5.0.2
+        version: 5.0.2
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@1.21.7)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
+      tsx:
+        specifier: ^4.0.0
+        version: 4.22.3
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@20.19.41)(jiti@1.21.7)(terser@5.47.1)(tsx@4.22.3)(yaml@2.9.0)
+      ws:
+        specifier: ^8.20.1
+        version: 8.20.1
+
 packages:
 
   '@alloc/quick-lru@5.2.0':
