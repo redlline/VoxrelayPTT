@@ -2,13 +2,14 @@
 set -euo pipefail
 
 PROJECT_DIR=${PROJECT_DIR:-/opt/ptt}
+COMPOSE_FILE="$PROJECT_DIR/infra/compose/production.yml"
 cd "$PROJECT_DIR"
 
 echo "[1/8] Preparing production env"
 cp -f .env.production .env
 
 echo "[2/8] Stopping current stack"
-docker compose down --remove-orphans || true
+docker compose -f "$COMPOSE_FILE" --project-directory "$PROJECT_DIR" -p ptt down --remove-orphans || true
 
 echo "[3/8] Removing old containers/images/cache"
 docker container prune -f || true
@@ -25,12 +26,12 @@ pnpm --filter @voxrelay/web build
 pnpm --filter @voxrelay/media-sfu build
 
 echo "[6/8] Rebuilding services"
-docker compose build --no-cache auth-service channel-svc media-sfu web-gateway
+docker compose -f "$COMPOSE_FILE" --project-directory "$PROJECT_DIR" -p ptt build --no-cache auth-service channel-svc media-sfu web-gateway
 
 echo "[7/8] Starting stack"
-docker compose up -d
+docker compose -f "$COMPOSE_FILE" --project-directory "$PROJECT_DIR" -p ptt up -d
 
 echo "[8/8] Result"
-docker compose ps
+docker compose -f "$COMPOSE_FILE" --project-directory "$PROJECT_DIR" -p ptt ps
 echo
 df -h /

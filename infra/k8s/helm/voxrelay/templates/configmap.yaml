@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "voxrelay.fullname" . }}-config
+data:
+  CORS_ORIGIN: {{ .Values.config.corsOrigin }}
+  STUN_SERVER: {{ .Values.config.stunServer }}
+  FLOOR_TIMEOUT_MS: "{{ .Values.config.floorTimeoutMs }}"
+  MEDIASOUP_LISTEN_IP: {{ .Values.config.mediasoup.listenIp }}
+  MEDIASOUP_ANNOUNCED_IP: {{ .Values.config.mediasoup.announcedIp }}
+  MEDIASOUP_MIN_PORT: "{{ .Values.config.mediasoup.minPort }}"
+  MEDIASOUP_MAX_PORT: "{{ .Values.config.mediasoup.maxPort }}"
+  MEDIASOUP_NUM_WORKERS: "{{ .Values.config.mediasoup.numWorkers }}"

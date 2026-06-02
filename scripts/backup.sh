@@ -10,6 +10,8 @@ BACKUP_DIR="${BACKUP_DIR:-/opt/ptt/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 ENV_FILE="${ENV_FILE:-/opt/ptt/.env}"
 COMPOSE_DIR="${COMPOSE_DIR:-/opt/ptt}"
+COMPOSE_PROJECT_DIR="${COMPOSE_PROJECT_DIR:-$COMPOSE_DIR}"
+COMPOSE_FILE="$COMPOSE_DIR/infra/compose/production.yml"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_PATH="${BACKUP_DIR}/${TIMESTAMP}"
 
@@ -22,7 +24,6 @@ mkdir -p "$BACKUP_PATH"
 
 cleanup_old() {
   find "$BACKUP_DIR" -maxdepth 1 -type d -name "20*" -mtime +"$RETENTION_DAYS" -exec rm -rf {} \; 2>/dev/null || true
-  # Also clean old .sql/.tar files at root level
   find "$BACKUP_DIR" -maxdepth 1 -type f \( -name "*.sql" -o -name "*.tar.gz" \) -mtime +"$RETENTION_DAYS" -delete 2>/dev/null || true
 }
 
@@ -30,7 +31,7 @@ cleanup_old() {
 backup_postgres() {
   echo "[$(date '+%H:%M:%S')] Dumping PostgreSQL..."
   cd "$COMPOSE_DIR"
-  docker compose exec -T postgres pg_dump -U "$DB_USER" "$DB_NAME" \
+  docker compose -f "$COMPOSE_FILE" --project-directory "$COMPOSE_PROJECT_DIR" -p ptt exec -T postgres pg_dump -U "$DB_USER" "$DB_NAME" \
     --clean \
     --if-exists \
     --no-owner \
@@ -45,9 +46,8 @@ backup_postgres() {
 backup_redis() {
   echo "[$(date '+%H:%M:%S')] Saving Redis..."
   cd "$COMPOSE_DIR"
-  docker compose exec -T redis redis-cli SAVE 2>/dev/null || true
-  # Copy RDB from Redis volume if accessible, else skip
-  local rdb_src=$(docker inspect "$(docker compose ps -q redis)" \
+  docker compose -f "$COMPOSE_FILE" --project-directory "$COMPOSE_PROJECT_DIR" -p ptt exec -T redis redis-cli SAVE 2>/dev/null || true
+  local rdb_src=$(docker inspect "$(docker compose -f "$COMPOSE_FILE" --project-directory "$COMPOSE_PROJECT_DIR" -p ptt ps -q redis)" \
     -f '{{range .Mounts}}{{.Source}}{{end}}' 2>/dev/null | head -1 || echo "")
   if [ -n "$rdb_src" ] && [ -f "$rdb_src/dump.rdb" ]; then
     cp "$rdb_src/dump.rdb" "${BACKUP_PATH}/redis.rdb"
@@ -62,7 +62,7 @@ backup_config() {
   echo "[$(date '+%H:%M:%S')] Backing up config..."
   tar czf "${BACKUP_PATH}/config.tar.gz" \
     -C "$COMPOSE_DIR" \
-    docker-compose.yml \
+    infra/compose/production.yml \
     .env \
     deploy/nginx/ 2>/dev/null || true
   echo "  -> config: $(du -h "${BACKUP_PATH}/config.tar.gz" | cut -f1)"
@@ -72,7 +72,7 @@ backup_config() {
 backup_minio() {
   echo "[$(date '+%H:%M:%S')] Checking MinIO..."
   cd "$COMPOSE_DIR"
-  docker compose exec -T minio mc ls local/ 2>/dev/null > "${BACKUP_PATH}/minio_buckets.txt" || \
+  docker compose -f "$COMPOSE_FILE" --project-directory "$COMPOSE_PROJECT_DIR" -p ptt exec -T minio mc ls local/ 2>/dev/null > "${BACKUP_PATH}/minio_buckets.txt" || \
     echo "MinIO listing skipped" > "${BACKUP_PATH}/minio_buckets.txt"
   echo "  -> minio buckets listed"
 }

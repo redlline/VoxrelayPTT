@@ -1,0 +1,206 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "voxrelay.fullname" . }}-auth
+  labels:
+    app.kubernetes.io/component: auth-service
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: auth-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: "{{ .Values.image.repository }}/auth-service:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3001
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "3001"
+            - name: DB_HOST
+              value: {{ .Release.Name }}-postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: {{ .Values.postgresql.auth.database }}
+            - name: DB_USER
+              value: {{ .Values.postgresql.auth.username }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: db-password
+            - name: REDIS_HOST
+              value: {{ .Release.Name }}-redis-master
+            - name: REDIS_PORT
+              value: "6379"
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: jwt-access-secret
+            - name: CORS_ORIGIN
+              value: {{ .Values.config.corsOrigin }}
+          resources:
+            {{- toYaml .Values.resources.auth-service | nindent 12 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "voxrelay.fullname" . }}-channel
+  labels:
+    app.kubernetes.io/component: channel-svc
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: channel-svc
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: channel-svc
+    spec:
+      containers:
+        - name: channel-svc
+          image: "{{ .Values.image.repository }}/channel-svc:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3002
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "3002"
+            - name: DB_HOST
+              value: {{ .Release.Name }}-postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: {{ .Values.postgresql.auth.database }}
+            - name: DB_USER
+              value: {{ .Values.postgresql.auth.username }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: db-password
+            - name: REDIS_HOST
+              value: {{ .Release.Name }}-redis-master
+            - name: REDIS_PORT
+              value: "6379"
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: jwt-access-secret
+            - name: CORS_ORIGIN
+              value: {{ .Values.config.corsOrigin }}
+          resources:
+            {{- toYaml .Values.resources.channel-svc | nindent 12 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "voxrelay.fullname" . }}-media
+  labels:
+    app.kubernetes.io/component: media-sfu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: media-sfu
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: media-sfu
+    spec:
+      containers:
+        - name: media-sfu
+          image: "{{ .Values.image.repository }}/media-sfu:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3003
+              protocol: TCP
+            - containerPort: 40000
+              protocol: UDP
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3003"
+            - name: DB_HOST
+              value: {{ .Release.Name }}-postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: {{ .Values.postgresql.auth.database }}
+            - name: DB_USER
+              value: {{ .Values.postgresql.auth.username }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: db-password
+            - name: REDIS_HOST
+              value: {{ .Release.Name }}-redis-master
+            - name: REDIS_PORT
+              value: "6379"
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: jwt-access-secret
+            - name: MEDIASOUP_LISTEN_IP
+              value: {{ .Values.config.mediasoup.listenIp }}
+            - name: MEDIASOUP_ANNOUNCED_IP
+              value: {{ .Values.config.mediasoup.announcedIp }}
+            - name: MEDIASOUP_MIN_PORT
+              value: "{{ .Values.config.mediasoup.minPort }}"
+            - name: MEDIASOUP_MAX_PORT
+              value: "{{ .Values.config.mediasoup.maxPort }}"
+            - name: MEDIASOUP_NUM_WORKERS
+              value: "{{ .Values.config.mediasoup.numWorkers }}"
+            - name: FLOOR_TIMEOUT_MS
+              value: "{{ .Values.config.floorTimeoutMs }}"
+            - name: MINIO_ENDPOINT
+              value: {{ .Release.Name }}-minio
+            - name: MINIO_PORT
+              value: "9000"
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: minio-access-key
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: minio-secret-key
+            - name: CORS_ORIGIN
+              value: {{ .Values.config.corsOrigin }}
+            - name: STUN_SERVER
+              value: {{ .Values.config.stunServer }}
+            - name: TURN_SERVER
+              value: {{ .Values.config.turnServer }}
+            - name: TURN_USERNAME
+              value: {{ .Values.config.turnUsername }}
+            - name: TURN_PASSWORD
+              value: {{ .Values.config.turnPassword }}
+            - name: TURN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voxrelay-secrets
+                  key: turn-secret
+            - name: HOST
+              value: 0.0.0.0
+          ports:
+            - containerPort: 40000
+              protocol: UDP
+          resources:
+            {{- toYaml .Values.resources.media-sfu | nindent 12 }}

@@ -7,12 +7,13 @@ set -euo pipefail
 # ============================================================
 
 COMPOSE_DIR="${COMPOSE_DIR:-/opt/ptt}"
+COMPOSE_PROJECT_DIR="${COMPOSE_PROJECT_DIR:-$COMPOSE_DIR}"
+COMPOSE_FILE="$COMPOSE_DIR/infra/compose/production.yml"
 WEBHOOK_URL="${WEBHOOK_URL:-}"
 
 STATE_FILE="/tmp/voxrelay-health-state.txt"
 HOSTNAME=$(hostname)
 
-# If no webhook configured, just log
 if [ -z "$WEBHOOK_URL" ]; then
   exec > /dev/null 2>&1
 fi
@@ -32,7 +33,6 @@ send_alert() {
     prev_state=$(cat "$STATE_FILE")
   fi
 
-  # Only send alert if state changed (avoid spam)
   local current_hash=$(echo "$message" | md5sum 2>/dev/null | cut -d' ' -f1 || echo "$message" | md5 2>/dev/null || echo "$message")
   if [ "$prev_state" = "$current_hash" ]; then
     return 0
@@ -63,10 +63,9 @@ fi
 
 # Check Docker containers
 cd "$COMPOSE_DIR"
-UNHEALTHY=$(docker compose ps --all --format '{{.Name}} {{.Status}}' | grep -v "Up" || true)
+UNHEALTHY=$(docker compose -f "$COMPOSE_FILE" --project-directory "$COMPOSE_PROJECT_DIR" -p ptt ps --all --format '{{.Name}} {{.Status}}' | grep -v "Up" || true)
 if [ -n "$UNHEALTHY" ]; then
   send_alert "Unhealthy containers on $HOSTNAME: $UNHEALTHY"
 fi
 
-# Reset state file on success
 rm -f "$STATE_FILE" 2>/dev/null || true

@@ -1,0 +1,55 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "title": "VoxRelay Overview",
+  "version": 1,
+  "uid": "voxrelay-overview",
+  "panels": [
+    {
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up", "legendFormat": "{{ job }}" }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Memory Usage",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [{ "expr": "process_resident_memory_bytes / 1024 / 1024", "legendFormat": "{{ job }}" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "MB"
+        }
+      }
+    },
+    {
+      "title": "Active Channels",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "targets": [{ "expr": "count(channel_is_active == 1)" }]
+    },
+    {
+      "title": "Database Connections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "sum(pg_stat_database_numbackends)", "legendFormat": "connections" }]
+    },
+    {
+      "title": "Redis Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{ "expr": "redis_memory_used_bytes", "legendFormat": "used" }]
+    }
+  ],
+  "schemaVersion": 39
+}

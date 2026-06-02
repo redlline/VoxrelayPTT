@@ -1,11 +1,13 @@
+name: voxrelay-staging
+
 services:
   web-gateway:
     image: nginx:1.27-alpine
     ports:
       - "8080:80"
     volumes:
-      - ./apps/web/dist:/usr/share/nginx/html:ro
-      - ./deploy/nginx/voxrelay.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../apps/web/dist:/usr/share/nginx/html:ro
+      - ../../deploy/nginx/voxrelay.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - auth-service
       - channel-svc
@@ -15,7 +17,7 @@ services:
 
   auth-service:
     build:
-      context: ./services/auth-service
+      context: ../../services/auth-service
       dockerfile: Dockerfile
     ports:
       - "3001:3001"
@@ -39,7 +41,7 @@ services:
 
   channel-svc:
     build:
-      context: ./services/channel-svc
+      context: ../../services/channel-svc
       dockerfile: Dockerfile
     ports:
       - "3002:3002"
@@ -63,7 +65,7 @@ services:
 
   media-sfu:
     build:
-      context: .
+      context: ../..
       dockerfile: services/media-sfu/Dockerfile
       target: development
     ports:
@@ -114,7 +116,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - pgdata_staging:/var/lib/postgresql/data
-      - ./infra/scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../../infra/scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U voxrelay"]
       interval: 5s

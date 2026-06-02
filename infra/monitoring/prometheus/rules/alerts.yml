@@ -1,0 +1,56 @@
+groups:
+  - name: voxrelay
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for 30s"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 90%"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk usage is above 90% on {{ $labels.mountpoint }}"
+
+      - alert: MediaSoupWorkerRestart
+        expr: changes(medieasoup_worker_count[5m]) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "MediaSoup worker restarted"
+          description: "A MediaSoup worker has restarted in the last 5 minutes"
+
+      - alert: PostgresConnectionHigh
+        expr: sum(pg_stat_database_numbackends) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connections"
+          description: "PostgreSQL has more than 50 active connections"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory high"
+          description: "Redis memory usage is above 80%"

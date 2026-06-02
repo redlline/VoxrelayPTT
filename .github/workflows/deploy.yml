@@ -19,6 +19,7 @@ env:
   REMOTE_USER: root
   REMOTE_HOST: 119.235.120.28
   REMOTE_PORT: 8222
+  COMPOSE_FILE: infra/compose/production.yml
 
 jobs:
   build:
@@ -67,7 +68,7 @@ jobs:
 
       - name: Build Docker images
         run: |
-          docker compose -p ptt build auth-service channel-svc media-sfu web-gateway
+          docker compose -f ${{ env.COMPOSE_FILE }} --project-directory . -p ptt build auth-service channel-svc media-sfu web-gateway
 
       - name: Save images
         run: |
@@ -96,10 +97,10 @@ jobs:
         run: |
           ssh -p ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
             ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} \
-            "mkdir -p ${{ env.COMPOSE_DIR }}/deploy/nginx"
+            "mkdir -p ${{ env.COMPOSE_DIR }}/infra/compose ${{ env.COMPOSE_DIR }}/deploy/nginx"
           scp -P ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
-            docker-compose.yml \
-            ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:${{ env.COMPOSE_DIR }}/docker-compose.yml
+            infra/compose/production.yml \
+            ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:${{ env.COMPOSE_DIR }}/infra/compose/production.yml
           scp -P ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
             deploy/nginx/voxrelay.conf \
             ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:${{ env.COMPOSE_DIR }}/deploy/nginx/voxrelay.conf
@@ -131,7 +132,7 @@ jobs:
           docker load < /tmp/web-gateway.tar.gz || true
 
           echo "[2/6] Recreating all services..."
-          docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
+          docker compose -f infra/compose/production.yml --project-directory /opt/ptt -p ptt up -d --force-recreate auth-service channel-svc media-sfu web-gateway
 
           echo "[3/6] Waiting for health checks (90s timeout)..."
           for svc in auth-service:3001/health channel-svc:3002/health media-sfu:3003/health; do
@@ -151,7 +152,7 @@ jobs:
             done
             if [ "$HEALTHY" = "false" ]; then
               echo "[ROLLBACK] $svc health check failed! Rolling back..."
-              docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
+              docker compose -f infra/compose/production.yml --project-directory /opt/ptt -p ptt up -d --force-recreate auth-service channel-svc media-sfu web-gateway
               exit 1
             fi
           done

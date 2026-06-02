@@ -1,0 +1,140 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/redlline/voxrelay
+  pullPolicy: Always
+  tag: latest
+
+imagePullSecrets:
+  - name: ghcr-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  hosts:
+    - host: ptt.turkmenportal.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: voxrelay-tls
+      hosts:
+        - ptt.turkmenportal.com
+
+resources:
+  auth-service:
+    requests:
+      memory: 64Mi
+      cpu: 100m
+    limits:
+      memory: 128Mi
+      cpu: 250m
+  channel-svc:
+    requests:
+      memory: 64Mi
+      cpu: 100m
+    limits:
+      memory: 128Mi
+      cpu: 250m
+  media-sfu:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 2048Mi
+      cpu: 2
+  postgres:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 1024Mi
+      cpu: 1
+  redis:
+    requests:
+      memory: 64Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 250m
+  minio:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+postgresql:
+  enabled: true
+  auth:
+    database: voxrelay
+    username: voxrelay
+    password: ""
+  primary:
+    persistence:
+      size: 10Gi
+
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 5Gi
+
+minio:
+  enabled: true
+  auth:
+    rootUser: minioadmin
+    rootPassword: ""
+  persistence:
+    size: 20Gi
+
+config:
+  corsOrigin: https://ptt.turkmenportal.com
+  stunServer: stun:stun.l.google.com:19302
+  turnServer: ""
+  turnUsername: ""
+  turnPassword: ""
+  mediasoup:
+    listenIp: 0.0.0.0
+    announcedIp: ""
+    minPort: 40000
+    maxPort: 40100
+    numWorkers: 2
+  floorTimeoutMs: 30000
+
+secrets:
+  dbPassword: ""
+  jwtAccessSecret: ""
+  jwtRefreshSecret: ""
+  cookieSecret: ""
+  minioAccessKey: minioadmin
+  minioSecretKey: ""
+  turnSecret: ""
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
