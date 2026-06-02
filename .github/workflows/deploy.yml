@@ -53,14 +53,26 @@ jobs:
       - name: Build web app
         run: pnpm --filter @voxrelay/web build 2>/dev/null || echo "web build skipped"
 
+      - name: Create .env for Docker Compose
+        run: |
+          cat > .env << EOF
+          JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
+          COOKIE_SECRET=${{ secrets.COOKIE_SECRET }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}
+          MEDIASOUP_ANNOUNCED_IP=${{ secrets.MEDIASOUP_ANNOUNCED_IP || '127.0.0.1' }}
+          EOF
+
       - name: Build Docker images
         run: |
-          docker compose build voxrelay-server-1 voxrelay-server-2 web-gateway
+          docker compose -p ptt build voxrelay-server web-gateway
 
       - name: Save images
         run: |
-          docker save ptt-voxrelay-server | gzip > /tmp/voxrelay-server.tar.gz
-          docker save ptt-web-gateway | gzip > /tmp/web-gateway.tar.gz
+          docker save ptt_voxrelay-server | gzip > /tmp/voxrelay-server.tar.gz
+          docker save ptt_web-gateway | gzip > /tmp/web-gateway.tar.gz
 
       - name: Upload images to server
         uses: appleboy/scp-action@v0.1.7
@@ -105,7 +117,7 @@ jobs:
             docker load < /tmp/web-gateway.tar.gz || true
 
             echo "[2/6] Recreating services..."
-            docker compose up -d --force-recreate voxrelay-server-1 voxrelay-server-2 web-gateway
+            docker compose up -d --force-recreate voxrelay-server web-gateway
 
             echo "[3/6] Waiting for health check (60s timeout)..."
             HEALTHY=false
@@ -122,20 +134,10 @@ jobs:
 
             if [ "$HEALTHY" = "false" ]; then
               echo "[ROLLBACK] Health check failed! Rolling back..."
-              docker compose up -d --force-recreate voxrelay-server-1 voxrelay-server-2 web-gateway
+              docker compose up -d --force-recreate voxrelay-server web-gateway
               echo "[ROLLBACK] Previous images restored. Deployment FAILED."
               exit 1
             fi
-
-            echo "[4/6] Checking second instance..."
-            for i in $(seq 1 6); do
-              STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://voxrelay-server-2:3000/health 2>/dev/null || echo "000")
-              if [ "$STATUS" = "200" ]; then
-                echo "  Instance 2 healthy!"
-                break
-              fi
-              sleep 3
-            done
 
             echo "[5/6] Running post-deploy backup..."
             bash scripts/backup.sh 2>/dev/null || true
