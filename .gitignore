@@ -60,6 +60,16 @@ apps/mobile/pubspec.lock
 tmp/
 .cache/
 
+# Deploy scripts with credentials
+check_*.py
+deploy*.py
+scripts/check_*.py
+scripts/deploy*.py
+scripts/final_deploy.py
+scripts/restart_all.py
+scripts/update_coturn.py
+scripts/verify*.py
+
 # Archives & binaries
 dist.zip
 ptt-sync.tar.gz
