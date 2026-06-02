@@ -76,26 +76,33 @@ jobs:
           docker save ptt_media-sfu | gzip > /tmp/media-sfu.tar.gz
           docker save ptt_web-gateway | gzip > /tmp/web-gateway.tar.gz
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ env.REMOTE_PORT }} ${{ env.REMOTE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Upload images to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ env.REMOTE_HOST }}
-          username: ${{ env.REMOTE_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ env.REMOTE_PORT }}
-          source: /tmp/auth-service.tar.gz,/tmp/channel-svc.tar.gz,/tmp/media-sfu.tar.gz,/tmp/web-gateway.tar.gz
-          target: /tmp/
-          strip_components: 1
+        run: |
+          scp -P ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
+            /tmp/auth-service.tar.gz \
+            /tmp/channel-svc.tar.gz \
+            /tmp/media-sfu.tar.gz \
+            /tmp/web-gateway.tar.gz \
+            ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:/tmp/
 
       - name: Upload compose and nginx config
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ env.REMOTE_HOST }}
-          username: ${{ env.REMOTE_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ env.REMOTE_PORT }}
-          source: docker-compose.yml,deploy/nginx/voxrelay.conf
-          target: /opt/ptt/
+        run: |
+          ssh -p ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
+            ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} \
+            "mkdir -p ${{ env.COMPOSE_DIR }}/deploy/nginx"
+          scp -P ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
+            docker-compose.yml \
+            ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:${{ env.COMPOSE_DIR }}/docker-compose.yml
+          scp -P ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
+            deploy/nginx/voxrelay.conf \
+            ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:${{ env.COMPOSE_DIR }}/deploy/nginx/voxrelay.conf
 
   deploy:
     needs: build
@@ -103,53 +110,57 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ env.REMOTE_PORT }} ${{ env.REMOTE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy to server
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ env.REMOTE_HOST }}
-          username: ${{ env.REMOTE_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ env.REMOTE_PORT }}
-          script: |
-            set -e
-            cd ${{ env.COMPOSE_DIR }}
+        run: |
+          ssh -p ${{ env.REMOTE_PORT }} -i ~/.ssh/deploy_key \
+            ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} << 'DEPLOY_SCRIPT'
+          set -e
+          cd /opt/ptt
 
-            echo "[1/6] Loading Docker images..."
-            docker load < /tmp/auth-service.tar.gz || true
-            docker load < /tmp/channel-svc.tar.gz || true
-            docker load < /tmp/media-sfu.tar.gz || true
-            docker load < /tmp/web-gateway.tar.gz || true
+          echo "[1/6] Loading Docker images..."
+          docker load < /tmp/auth-service.tar.gz || true
+          docker load < /tmp/channel-svc.tar.gz || true
+          docker load < /tmp/media-sfu.tar.gz || true
+          docker load < /tmp/web-gateway.tar.gz || true
 
-            echo "[2/6] Recreating all services..."
-            docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
+          echo "[2/6] Recreating all services..."
+          docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
 
-            echo "[3/6] Waiting for health checks (90s timeout)..."
-            for svc in auth-service:3001/health channel-svc:3002/health media-sfu:3003/health; do
-              echo "  Checking $svc..."
-              HEALTHY=false
-              for i in $(seq 1 12); do
-                HOST=$(echo $svc | cut -d: -f1)
-                PORT=$(echo $svc | cut -d: -f2 | cut -d/ -f1)
-                STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://$HOST:$PORT/health 2>/dev/null || echo "000")
-                if [ "$STATUS" = "200" ]; then
-                  HEALTHY=true
-                  echo "  $svc OK"
-                  break
-                fi
-                echo "  Attempt $i: $svc status=$STATUS, waiting 5s..."
-                sleep 5
-              done
-              if [ "$HEALTHY" = "false" ]; then
-                echo "[ROLLBACK] $svc health check failed! Rolling back..."
-                docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
-                exit 1
+          echo "[3/6] Waiting for health checks (90s timeout)..."
+          for svc in auth-service:3001/health channel-svc:3002/health media-sfu:3003/health; do
+            echo "  Checking $svc..."
+            HEALTHY=false
+            for i in $(seq 1 12); do
+              HOST=$(echo $svc | cut -d: -f1)
+              PORT=$(echo $svc | cut -d: -f2 | cut -d/ -f1)
+              STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://$HOST:$PORT/health 2>/dev/null || echo "000")
+              if [ "$STATUS" = "200" ]; then
+                HEALTHY=true
+                echo "  $svc OK"
+                break
               fi
+              echo "  Attempt $i: $svc status=$STATUS, waiting 5s..."
+              sleep 5
             done
+            if [ "$HEALTHY" = "false" ]; then
+              echo "[ROLLBACK] $svc health check failed! Rolling back..."
+              docker compose up -d --force-recreate auth-service channel-svc media-sfu web-gateway
+              exit 1
+            fi
+          done
 
-            echo "[5/6] Running post-deploy backup..."
-            bash scripts/backup.sh 2>/dev/null || true
+          echo "[5/6] Running post-deploy backup..."
+          bash scripts/backup.sh 2>/dev/null || true
 
-            echo "[6/6] Cleaning up..."
-            rm -f /tmp/auth-service.tar.gz /tmp/channel-svc.tar.gz /tmp/media-sfu.tar.gz /tmp/web-gateway.tar.gz
-            docker image prune -f 2>/dev/null || true
-            echo "Deployment complete!"
+          echo "[6/6] Cleaning up..."
+          rm -f /tmp/auth-service.tar.gz /tmp/channel-svc.tar.gz /tmp/media-sfu.tar.gz /tmp/web-gateway.tar.gz
+          docker image prune -f 2>/dev/null || true
+          echo "Deployment complete!"
+          DEPLOY_SCRIPT
