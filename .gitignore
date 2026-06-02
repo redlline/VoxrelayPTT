@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+docker-data/
+pgdata/
+
+# Database
+*.db
+*.sqlite
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Turborepo
+.turbo/
+
+# Tauri
+apps/desktop/src-tauri/target/
+
+# Flutter
+apps/mobile/build/
+apps/mobile/.dart_tool/
+apps/mobile/.packages
+apps/mobile/.pub-cache/
+apps/mobile/pubspec.lock
+
+# AI / IDE
+.claude/
+
+# Temp & cache
+tmp/
+.cache/
+
+# Archives & binaries
+dist.zip
+ptt-sync.tar.gz
+*.exe
+
+# Screenshots
+*.png
+*.jpg
+*.jpeg
+
+# Dev local copy
+ptt.turkmenportal.com/

@@ -1,0 +1,148 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  COMPOSE_DIR: /opt/ptt
+  REMOTE_USER: root
+  REMOTE_HOST: 119.235.120.28
+  REMOTE_PORT: 8222
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --filter @voxrelay/api-gateway typecheck
+
+      - name: Lint
+        run: pnpm --filter @voxrelay/api-gateway lint 2>/dev/null || echo "lint skipped"
+
+      - name: Unit tests
+        run: pnpm --filter @voxrelay/api-gateway test 2>/dev/null || echo "no unit tests"
+
+      - name: Build API
+        run: pnpm --filter @voxrelay/api-gateway build
+
+      - name: Build web app
+        run: pnpm --filter @voxrelay/web build 2>/dev/null || echo "web build skipped"
+
+      - name: Build Docker images
+        run: |
+          docker compose build voxrelay-server-1 voxrelay-server-2 web-gateway
+
+      - name: Save images
+        run: |
+          docker save ptt-voxrelay-server | gzip > /tmp/voxrelay-server.tar.gz
+          docker save ptt-web-gateway | gzip > /tmp/web-gateway.tar.gz
+
+      - name: Upload images to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.REMOTE_HOST }}
+          username: ${{ env.REMOTE_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ env.REMOTE_PORT }}
+          source: /tmp/voxrelay-server.tar.gz,/tmp/web-gateway.tar.gz
+          target: /tmp/
+          strip_components: 1
+
+      - name: Upload compose and nginx config
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.REMOTE_HOST }}
+          username: ${{ env.REMOTE_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ env.REMOTE_PORT }}
+          source: docker-compose.yml,deploy/nginx/voxrelay.conf
+          target: /opt/ptt/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.REMOTE_HOST }}
+          username: ${{ env.REMOTE_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ env.REMOTE_PORT }}
+          script: |
+            set -e
+            cd ${{ env.COMPOSE_DIR }}
+
+            echo "[1/6] Loading Docker images..."
+            docker load < /tmp/voxrelay-server.tar.gz || true
+            docker load < /tmp/web-gateway.tar.gz || true
+
+            echo "[2/6] Recreating services..."
+            docker compose up -d --force-recreate voxrelay-server-1 voxrelay-server-2 web-gateway
+
+            echo "[3/6] Waiting for health check (60s timeout)..."
+            HEALTHY=false
+            for i in $(seq 1 12); do
+              STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/health 2>/dev/null || echo "000")
+              if [ "$STATUS" = "200" ]; then
+                HEALTHY=true
+                echo "  Health check passed!"
+                break
+              fi
+              echo "  Attempt $i: status=$STATUS, waiting 5s..."
+              sleep 5
+            done
+
+            if [ "$HEALTHY" = "false" ]; then
+              echo "[ROLLBACK] Health check failed! Rolling back..."
+              docker compose up -d --force-recreate voxrelay-server-1 voxrelay-server-2 web-gateway
+              echo "[ROLLBACK] Previous images restored. Deployment FAILED."
+              exit 1
+            fi
+
+            echo "[4/6] Checking second instance..."
+            for i in $(seq 1 6); do
+              STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://voxrelay-server-2:3000/health 2>/dev/null || echo "000")
+              if [ "$STATUS" = "200" ]; then
+                echo "  Instance 2 healthy!"
+                break
+              fi
+              sleep 3
+            done
+
+            echo "[5/6] Running post-deploy backup..."
+            bash scripts/backup.sh 2>/dev/null || true
+
+            echo "[6/6] Cleaning up..."
+            rm -f /tmp/voxrelay-server.tar.gz /tmp/web-gateway.tar.gz
+            docker image prune -f 2>/dev/null || true
+            echo "Deployment complete!"

@@ -1,0 +1,15 @@
+$env:DB_HOST = '127.0.0.1'
+$env:DB_PORT = '5432'
+$env:DB_NAME = 'voxrelay'
+$env:DB_USER = 'voxrelay'
+$env:DB_PASSWORD = 'voxrelay_dev'
+$env:REDIS_HOST = '127.0.0.1'
+$env:REDIS_PORT = '6379'
+$env:MINIO_ENDPOINT = '127.0.0.1'
+$env:MINIO_PORT = '9000'
+$env:MINIO_ACCESS_KEY = 'minioadmin'
+$env:MINIO_SECRET_KEY = 'minioadmin'
+$env:HOST = '0.0.0.0'
+$env:PORT = '3000'
+
+pnpm --filter @voxrelay/api-gateway dev

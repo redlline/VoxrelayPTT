@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@voxrelay/core": ["packages/voxrelay-core/src"],
+      "@voxrelay/api-client": ["packages/voxrelay-api-client/src"],
+      "@voxrelay/audio": ["packages/voxrelay-audio/src"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}

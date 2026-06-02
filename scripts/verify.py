@@ -1,0 +1,10 @@
+import paramiko, time
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.connect('119.235.120.28', port=8222, username='root', password='vpspassword12wq')
+time.sleep(10)
+stdin, stdout, stderr = ssh.exec_command('curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health 2>&1')
+print('Health:', stdout.read().decode('utf-8', errors='replace'))
+stdin, stdout, stderr = ssh.exec_command('docker ps --format "table {{.Names}}\t{{.Status}}" 2>&1')
+print(stdout.read().decode('utf-8', errors='replace'))
+ssh.close()
