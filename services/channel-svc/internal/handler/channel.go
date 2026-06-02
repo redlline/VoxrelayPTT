@@ -180,7 +180,7 @@ func (h *ChannelHandler) Join(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.db.GetChannelMember(r.Context(), id, userID)
 	if err == nil && existing != nil {
-		writeError(w, http.StatusBadRequest, "already a member")
+		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 		return
 	}
 
