@@ -18,7 +18,9 @@ services/
   api-gateway/  — Fastify + Mediasoup (монолит)
 
 packages/
-  voxrelay-core/ — Shared types & validation
+  voxrelay-core/  — Shared types & validation (Zod)
+  voxrelay-api-client/ — API client library (TypeScript)
+  voxrelay-audio/ — Audio processing (Web Audio API + WASM)
 
 infra/
   scripts/      — Скрипты инициализации

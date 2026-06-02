@@ -89,6 +89,17 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/debug@4.1.13)(@types/node@20.19.41)(jiti@1.21.7)(terser@5.47.1)(tsx@4.22.3)(yaml@2.9.0)
 
+  packages/voxrelay-api-client:
+    dependencies:
+      '@voxrelay/core':
+        specifier: workspace:*
+        version: link:../voxrelay-core
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+
+  packages/voxrelay-audio: {}
+
   packages/voxrelay-core:
     dependencies:
       zod:
