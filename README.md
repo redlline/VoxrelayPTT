@@ -13,48 +13,38 @@ Low-latency voice communication with channels, dispatching, and admin controls.
 ```
 apps/
   web/          — PWA (React + Vite + WebRTC)
-  mobile/       — Flutter (iOS + Android) [v1.0]
-  desktop/      — Tauri (Rust + React)     [v1.0]
 
 services/
-  api-gateway/  — Fastify + Mediasoup      [MVP monolith]
-  auth-service/ — Go                       [v1.0]
-  channel-svc/  — Go                       [v1.0]
-  recording/    — Go + MinIO               [v1.0]
-  media-sfu/    — Mediasoup cluster        [v1.0]
+  api-gateway/  — Fastify + Mediasoup (монолит)
 
 packages/
-  core/         — Shared types & validation
-  api-client/   — API client library
-  audio/        — Audio processing (WASM)
+  voxrelay-core/ — Shared types & validation
 
 infra/
-  compose/      — Docker Compose files
-  k8s/          — Kubernetes Helm charts
-  monitoring/   — Prometheus + Grafana
+  scripts/      — Скрипты инициализации
 ```
+
+*Планируется: мобильное приложение (Flutter), десктоп (Tauri), микросервисы на Go, кластер Mediasoup, мониторинг.*
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
-| Backend | Node.js + TypeScript (API), Go (services) |
+| Backend | Node.js + TypeScript (Fastify) |
 | Real-time Audio | WebRTC + Mediasoup SFU |
 | Database | PostgreSQL 16 + Redis 7 |
 | Storage | MinIO (S3-compatible) |
 | Client (Web) | React 19 + Vite + PWA |
-| Client (Mobile) | Flutter 3.x [v1.0] |
-| Client (Desktop) | Tauri 2.x [v1.0] |
-| Deployment | Docker + Kubernetes |
+| Deployment | Docker + Docker Compose |
 
 ## Features
 
-- Push-to-Talk: Space key or on-screen button
-- Channels: Public/private, member management
-- Real-time Presence: See who's online and speaking
-- Audio Meter: Visual level indicator
-- Admin Panel: User & channel management, RBAC
-- PWA: Installable on desktop and mobile
+- Push-to-Talk: клавиша пробела или кнопка на экране
+- Channels: публичные/приватные, управление участниками
+- Real-time Presence: кто онлайн и кто говорит
+- Audio Meter: визуальный индикатор уровня
+- Admin Panel: управление пользователями и каналами, RBAC
+- PWA: установка на телефон и десктоп
 
 ## Quick Start
 
@@ -65,10 +55,10 @@ git clone https://github.com/redlline/VoxrelayPTT.git
 cd VoxrelayPTT
 pnpm install
 
-# Start infrastructure (PostgreSQL, Redis, TURN)
+# Start infrastructure
 docker compose up -d postgres redis coturn
 
-# Run database migrations
+# Run migrations
 pnpm run db:migrate
 
 # Start development
