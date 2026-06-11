@@ -1,7 +1,9 @@
 import { getRedis } from '../lib/redis.js';
 import { FloorPriority, FloorState, FloorQueueItem, FloorEvent, SpeakerEvent } from './types.js';
+import { redisSpeakerLock } from './redis-speaker-lock.js';
 
 const FLOOR_TIMEOUT_MS = parseInt(process.env.FLOOR_TIMEOUT_MS || '30000', 10);
+const USE_REDIS_LOCK = process.env.USE_REDIS_SPEAKER_LOCK !== 'false';
 const redisPrefix = 'floor:';
 
 type EventCallback = (event: FloorEvent | SpeakerEvent) => void;
@@ -146,7 +148,11 @@ export class FloorControlManager {
     return this.floors.get(channelId);
   }
 
-  getSpeaker(channelId: string): string | null {
+  async getSpeaker(channelId: string): Promise<string | null> {
+    if (USE_REDIS_LOCK) {
+      const owner = await redisSpeakerLock.getOwner(channelId);
+      if (owner) return owner;
+    }
     return this.floors.get(channelId)?.currentSpeaker ?? null;
   }
 
@@ -181,6 +187,9 @@ export class FloorControlManager {
     await redis.setex(`${redisPrefix}speaker:${channelId}`, 60, userId);
     await redis.setex(`${redisPrefix}priority:${channelId}:${userId}`, 60, String(priority));
     await redis.setex(`${redisPrefix}speaking_since:${channelId}`, 60, String(Date.now()));
+    if (USE_REDIS_LOCK) {
+      await redisSpeakerLock.acquire(channelId, userId);
+    }
 
     const timeout = setTimeout(async () => {
       await this.forceRelease(channelId, 'Speaking timeout (30s)');
@@ -216,6 +225,9 @@ export class FloorControlManager {
     await redis.del(`${redisPrefix}speaker:${channelId}`);
     await redis.del(`${redisPrefix}speaking_since:${channelId}`);
     await redis.del(`${redisPrefix}lock:${channelId}`);
+    if (USE_REDIS_LOCK && previousSpeaker) {
+      await redisSpeakerLock.release(channelId, previousSpeaker);
+    }
 
     this.emit({ type: 'speaking.stopped', channelId, userId: previousSpeaker || '' });
 

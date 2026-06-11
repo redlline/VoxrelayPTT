@@ -216,8 +216,19 @@ export class SfuSignalingHandler {
       rtpParameters,
       producerPeerId: this.userId,
       producerDisplayName: this.displayName,
-      isSpeaker: isAudioSpeaker,
     }, this.userId);
+
+    // If this audio producer was created by the current speaker, re-broadcast
+    // speaker-changed so other clients can look up the consumer by producerId.
+    if (isAudioSpeaker) {
+      this.broadcastToChannel(channelId, {
+        type: 'speaker-changed',
+        channelId,
+        activeSpeaker: this.userId,
+        displayName: this.displayName,
+        producerId: producer.id,
+      });
+    }
 
     // Notify channel listeners when this producer goes away.
     producer.on('close', () => {
@@ -294,11 +305,20 @@ export class SfuSignalingHandler {
           }
         }
       }
+      let audioProducerId: string | null = null;
+      const dcRoom = roomManager.getRoom(channelId);
+      if (dcRoom) {
+        const dcProducers = producerManager.getProducersByUser(dcRoom, this.userId);
+        for (const p of dcProducers) {
+          if (p.kind === 'audio') { audioProducerId = p.id; break; }
+        }
+      }
       this.broadcastToChannel(channelId, {
-        type: 'speaking.started',
+        type: 'speaker-changed',
         channelId,
-        userId: this.userId,
+        activeSpeaker: this.userId,
         displayName: this.displayName,
+        producerId: audioProducerId,
       });
       return;
     }
@@ -551,16 +571,21 @@ export class SfuSignalingHandler {
         });
       }
 
-      for (const producer of room.producers.values()) {
-        const speaker = floorControlManager.getSpeaker(channelId);
-        if (producer.appData?.userId === speaker) {
-          this.broadcastToChannel(channelId, {
-            type: 'speaking.started',
-            channelId,
-            userId: speaker,
-            displayName: producer.appData?.displayName || '',
-          });
+      const speaker = floorControlManager.getSpeaker(channelId);
+      if (speaker) {
+        let speakerProducerId: string | null = null;
+        for (const [, sp] of room.producers) {
+          if (sp.appData?.userId === speaker && sp.kind === 'audio') {
+            speakerProducerId = sp.id; break;
+          }
         }
+        this.broadcastToChannel(channelId, {
+          type: 'speaker-changed',
+          channelId,
+          activeSpeaker: speaker,
+          displayName: speakerProducerId ? (room.producers.get(speakerProducerId)?.appData?.displayName ?? '') : '',
+          producerId: speakerProducerId,
+        });
       }
     }
     this.broadcastToChannel(channelId, {

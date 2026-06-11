@@ -416,32 +416,46 @@ export function broadcastToAll(msg: any, excludeUserId?: string): void {
   }
 }
 
-// Floor control event listeners — broadcast speaking events to channel + all dispatchers
+// Floor control event listeners — broadcast speaker-changed to channel + all dispatchers
 const floorSpeakingStarted = (event: any) => {
+  let producerId: string | null = null;
+  const room = roomManager.getRoom(event.channelId);
+  if (room) {
+    for (const [id, producer] of room.producers) {
+      if (producer.appData?.userId === event.userId && producer.kind === 'audio') {
+        producerId = id;
+        break;
+      }
+    }
+  }
   broadcastToChannel(event.channelId, {
-    type: 'speaking.started',
+    type: 'speaker-changed',
     channelId: event.channelId,
-    userId: event.userId,
+    activeSpeaker: event.userId,
     displayName: event.displayName,
+    producerId,
   });
   broadcastToDispatchers({
-    type: 'speaking.started',
+    type: 'speaker-changed',
     channelId: event.channelId,
-    userId: event.userId,
+    activeSpeaker: event.userId,
     displayName: event.displayName,
+    producerId,
   });
 };
 
 const floorSpeakingStopped = (event: any) => {
   broadcastToChannel(event.channelId, {
-    type: 'speaking.stopped',
+    type: 'speaker-changed',
     channelId: event.channelId,
-    userId: event.userId,
+    activeSpeaker: null,
+    producerId: null,
   });
   broadcastToDispatchers({
-    type: 'speaking.stopped',
+    type: 'speaker-changed',
     channelId: event.channelId,
-    userId: event.userId,
+    activeSpeaker: null,
+    producerId: null,
   });
 };
 

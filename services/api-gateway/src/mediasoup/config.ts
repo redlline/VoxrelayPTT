@@ -18,11 +18,11 @@ export const mediasoupConfig = {
         parameters: {
           useinbandfec: 1,
           usedtx: 1,
-          stereo: 1,
-          maxaveragebitrate: 96000,
+          stereo: 0,
+          maxaveragebitrate: 48000,
           maxplaybackrate: 48000,
           cbr: 0,
-          sprop_stereo: 1,
+          sprop_stereo: 0,
         },
       },
       {

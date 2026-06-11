@@ -73,30 +73,51 @@ export function DispatcherPage() {
   const [isLive, setIsLive] = useState(true);
   const [speakers, setSpeakers] = useState<Record<string, { userId: string; displayName: string }>>({});
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [mutedChannels, setMutedChannels] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('dispatcher_muted_channels');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('dispatcher_muted_channels', JSON.stringify([...mutedChannels]));
+  }, [mutedChannels]);
+
+  function toggleChannelMute(channelId: string) {
+    setMutedChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(channelId)) {
+        next.delete(channelId);
+      } else {
+        next.add(channelId);
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     wsClient.connect();
     void loadData();
     pushEvent('info', 'Dispatcher console initialized');
 
-    const onSpeakingStarted = (data: any) => {
-      setSpeakers((prev) => ({ ...prev, [data.channelId]: { userId: data.userId, displayName: data.displayName || data.userId } }));
-      pushEvent('warn', `[${data.channelId}] ${data.displayName || data.userId} started speaking`);
-    };
-    const onSpeakingStopped = (data: any) => {
-      setSpeakers((prev) => { const n = { ...prev }; delete n[data.channelId]; return n; });
-      pushEvent('info', `[${data.channelId}] speaking stopped`);
+    const onSpeakerChanged = (data: any) => {
+      if (data.activeSpeaker) {
+        setSpeakers((prev) => ({ ...prev, [data.channelId]: { userId: data.activeSpeaker, displayName: data.displayName || data.activeSpeaker } }));
+        pushEvent('warn', `[${data.channelId}] ${data.displayName || data.activeSpeaker} started speaking`);
+      } else {
+        setSpeakers((prev) => { const n = { ...prev }; delete n[data.channelId]; return n; });
+        pushEvent('info', `[${data.channelId}] speaking stopped`);
+      }
     };
     const onConnected = () => { setIsLive(true); pushEvent('info', 'Realtime link restored'); void loadData(); };
     const onDisconnected = () => { setIsLive(false); pushEvent('critical', 'Realtime link lost'); };
 
-    wsClient.on('speaking.started', onSpeakingStarted);
-    wsClient.on('speaking.stopped', onSpeakingStopped);
+    wsClient.on('speaker-changed', onSpeakerChanged);
     wsClient.onLifecycle('connected', onConnected);
     wsClient.onLifecycle('disconnected', onDisconnected);
     return () => {
-      wsClient.off('speaking.started', onSpeakingStarted);
-      wsClient.off('speaking.stopped', onSpeakingStopped);
+      wsClient.off('speaker-changed', onSpeakerChanged);
       wsClient.offLifecycle('connected', onConnected);
       wsClient.offLifecycle('disconnected', onDisconnected);
     };
@@ -217,6 +238,16 @@ export function DispatcherPage() {
         </div>
       </header>
 
+      <div className="flex items-center gap-3 border-b border-slate-800 bg-slate-900/30 px-4 py-1.5 text-[10px] text-slate-400">
+        <span className="inline-flex items-center gap-1 text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> {Object.keys(speakers).length} active
+        </span>
+        <span>{channels.length} channels</span>
+        <span>{onlineUsers.length} online</span>
+        <span className="ml-auto">{mutedChannels.size} muted</span>
+        <span>{new Date().toLocaleTimeString()}</span>
+      </div>
+
       {emergencyChannels.length > 0 && (
         <div className="relative shrink-0 border-b border-slate-800 bg-slate-900/40">
           <div className="flex items-center gap-2 overflow-x-auto px-4 py-2">
@@ -268,7 +299,14 @@ export function DispatcherPage() {
                     </div>
                     <div className="mt-1 flex items-center justify-between text-[10px] text-indigo-300/40">
                       <span>{ch.memberCount} users</span>
-                      {ch.isRecording && <span className="flex items-center gap-1 text-rose-400"><Circle className="h-2 w-2 animate-recording fill-rose-400" /> REC</span>}
+                      <span className="flex items-center gap-1">
+                        {mutedChannels.has(ch.id) ? (
+                          <span className="text-amber-400" onClick={(e) => { e.stopPropagation(); toggleChannelMute(ch.id); }}>MUTED</span>
+                        ) : (
+                          <span className="text-slate-600 hover:text-slate-400 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleChannelMute(ch.id); }}>mute</span>
+                        )}
+                        {ch.isRecording && <span className="flex items-center gap-1 text-rose-400"><Circle className="h-2 w-2 animate-recording fill-rose-400" /> REC</span>}
+                      </span>
                     </div>
                     {speaker && (
                       <div className="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-400">

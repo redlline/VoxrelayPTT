@@ -74,6 +74,7 @@ export function ChannelPage() {
   }, [channelId, navigate]);
 
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const pendingAudioConsumersRef = useRef<Map<string, any>>(new Map());
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const joinedRef = useRef(false);
@@ -93,20 +94,30 @@ export function ChannelPage() {
       realtimeInitRef.current = false;
       closeRecvTransport();
     };
-    const onSpeakingStarted = (data: any) => {
+    const onSpeakerChanged = (data: any) => {
       if (data.channelId !== channelId) return;
-      setFloorSpeaker({ userId: data.userId, displayName: data.displayName });
-      setMembers((prev) => prev.map((m) => ({ ...m, isSpeaking: m.id === data.userId })));
-      audioElementsRef.current.forEach((audio) => {
-        if (audio.paused) {
+      if (data.activeSpeaker) {
+        setFloorSpeaker({ userId: data.activeSpeaker, displayName: data.displayName || '' });
+        setMembers((prev) => prev.map((m) => ({ ...m, isSpeaking: m.id === data.activeSpeaker })));
+        const consumer = pendingAudioConsumersRef.current.get(data.producerId);
+        if (consumer && !audioElementsRef.current.has(data.producerId)) {
+          const audio = new Audio();
+          audio.srcObject = new MediaStream([consumer.track]);
           audio.play().catch(() => {});
+          audioElementsRef.current.set(data.producerId, audio);
         }
-      });
-    };
-    const onSpeakingStopped = (data: any) => {
-      if (data.channelId !== channelId) return;
-      setFloorSpeaker(null);
-      setMembers((prev) => prev.map((m) => ({ ...m, isSpeaking: false })));
+        audioElementsRef.current.forEach((audio) => {
+          if (audio.paused) {
+            audio.play().catch(() => {});
+          }
+        });
+      } else {
+        setFloorSpeaker(null);
+        setMembers((prev) => prev.map((m) => ({ ...m, isSpeaking: false })));
+        audioElementsRef.current.forEach((audio) => {
+          audio.pause();
+        });
+      }
     };
     const onPttGranted = (data: any) => {
       if (data.channelId !== channelId) return;
@@ -118,11 +129,6 @@ export function ChannelPage() {
       setFloorSpeaker({
         userId: data.userId || user?.id || '',
         displayName: data.displayName || user?.displayName || 'You',
-      });
-      audioElementsRef.current.forEach((audio) => {
-        if (audio.paused) {
-          audio.play().catch(() => {});
-        }
       });
     };
     const onPttQueued = (data: any) => {
@@ -174,13 +180,15 @@ export function ChannelPage() {
           });
         } else {
           addConsumer(data.producerId, consumer);
-          const audio = new Audio();
-          audio.srcObject = new MediaStream([consumer.track]);
-          audio.play().catch(() => {
-            const retry = () => audio.play().catch(() => {});
-            document.addEventListener('pointerdown', retry, { once: true });
-          });
-          audioElementsRef.current.set(data.producerId, audio);
+          pendingAudioConsumersRef.current.set(data.producerId, consumer);
+          // If this consumer belongs to the current speaker, play immediately
+          const currentSpeaker = usePTTStore.getState().floorSpeaker;
+          if (currentSpeaker && data.producerPeerId === currentSpeaker.userId && !audioElementsRef.current.has(data.producerId)) {
+            const audio = new Audio();
+            audio.srcObject = new MediaStream([consumer.track]);
+            audio.play().catch(() => {});
+            audioElementsRef.current.set(data.producerId, audio);
+          }
         }
       } catch {
         toast.error('Consumer creation failed');
@@ -202,8 +210,7 @@ export function ChannelPage() {
       }
     };
 
-    wsClient.on('speaking.started', onSpeakingStarted);
-    wsClient.on('speaking.stopped', onSpeakingStopped);
+    wsClient.on('speaker-changed', onSpeakerChanged);
     wsClient.on('ptt.granted', onPttGranted);
     wsClient.on('ptt.queued', onPttQueued);
     wsClient.on('ptt.force_release', onPttReset);
@@ -279,8 +286,7 @@ export function ChannelPage() {
         localStreamRef.current?.getTracks().forEach(t => t.stop());
       }
       wsClient.send({ type: 'channel.leave', channelId });
-      wsClient.off('speaking.started', onSpeakingStarted);
-      wsClient.off('speaking.stopped', onSpeakingStopped);
+      wsClient.off('speaker-changed', onSpeakerChanged);
       wsClient.off('ptt.granted', onPttGranted);
       wsClient.off('ptt.queued', onPttQueued);
       wsClient.off('ptt.force_release', onPttReset);
@@ -306,6 +312,7 @@ export function ChannelPage() {
         audio.srcObject = null;
       });
       audioElementsRef.current.clear();
+      pendingAudioConsumersRef.current.clear();
       videoElementsRef.current.forEach((video) => {
         video.pause();
         video.srcObject = null;
