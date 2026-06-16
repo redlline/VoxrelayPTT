@@ -16,6 +16,7 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, bool> _typing = {};
   StreamSubscription? _wsSubscription;
   bool _isLoading = false;
+  String? _activeConversationId;
 
   ChatProvider(this._api, this._ws, this._repo);
 
@@ -23,6 +24,10 @@ class ChatProvider extends ChangeNotifier {
   List<Message> messages(String convId) => _messages[convId] ?? [];
   bool isLoading(String convId) => _isLoading;
   bool isTyping(String userId) => _typing[userId] ?? false;
+
+  void setActiveConversation(String? conversationId) {
+    _activeConversationId = conversationId;
+  }
 
   void init() {
     _wsSubscription = _ws.events.listen(_handleWsEvent);
@@ -43,7 +48,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _onNewMessage(Map<String, dynamic> data) {
-    final msg = Message.fromJson(data);
+    final msgData = data['message'] as Map<String, dynamic>? ?? data;
+    final msg = Message.fromJson(msgData);
     final convId = msg.conversationId;
     if (!_messages.containsKey(convId)) {
       _messages[convId] = [];
@@ -51,10 +57,14 @@ class ChatProvider extends ChangeNotifier {
     _messages[convId]!.add(msg);
     final idx = _conversations.indexWhere((c) => c.id == convId);
     if (idx != -1) {
+      final isActive = convId == _activeConversationId;
       _conversations[idx] = _conversations[idx].copyWith(
         lastMessage: msg,
-        unreadCount: _conversations[idx].unreadCount + 1,
+        unreadCount: isActive ? 0 : _conversations[idx].unreadCount + 1,
       );
+    }
+    if (convId == _activeConversationId) {
+      _ws.markRead(convId);
     }
     notifyListeners();
   }
@@ -85,7 +95,8 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
     final result = await _repo.getMessages(conversationId);
     if (result.isSuccess) {
-      _messages[conversationId] = result.valueOrNull!;
+      // Server returns messages newest-first; display oldest-first (top to bottom).
+      _messages[conversationId] = result.valueOrNull!.reversed.toList();
     }
     _isLoading = false;
     notifyListeners();

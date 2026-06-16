@@ -360,6 +360,13 @@ class ApiService {
     });
   }
 
+  Future<List<int>> getRecordingAudio(String filePath) async {
+    final uri = Uri.parse('$baseUrl/recordings/file/$filePath');
+    final res = await _client.get(uri, headers: _headers(auth: true));
+    if (res.statusCode == 200) return res.bodyBytes;
+    throw ApiException(res.statusCode, 'Failed to load recording audio');
+  }
+
   Future<String> uploadFile(String filePath) async {
     final uri = Uri.parse('$baseUrl/upload');
     final request = http.MultipartRequest('POST', uri);

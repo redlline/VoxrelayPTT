@@ -11,8 +11,8 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "db:migrate": "pnpm --filter @voxrelay/api-gateway run db:migrate",
-    "db:seed": "pnpm --filter @voxrelay/api-gateway run db:seed"
+    "db:migrate": "pnpm --filter @voxrelay/media-sfu run db:migrate",
+    "db:seed": "pnpm --filter @voxrelay/media-sfu run db:seed"
   },
   "engines": {
     "node": ">=20.0.0",

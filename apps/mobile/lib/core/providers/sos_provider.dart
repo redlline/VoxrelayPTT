@@ -93,13 +93,6 @@ class SosProvider extends ChangeNotifier {
           status: 'active',
           createdAt: DateTime.now(),
         );
-        _ws.sendSos({
-          'id': alert.id,
-          'message': message,
-          'latitude': loc?.latitude,
-          'longitude': loc?.longitude,
-          'channelId': channelId,
-        });
       } else {
         if (loc?.latitude != null && loc?.longitude != null) {
           _ws.updateLocation(loc!.latitude, loc.longitude);

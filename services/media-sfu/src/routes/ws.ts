@@ -69,6 +69,16 @@ export function broadcastToDispatchers(msg: any): void {
 }
 
 export async function wsRoutes(app: FastifyInstance) {
+  // This process starts with no live sockets, so any presence state left over
+  // in Redis from a previous (e.g. crashed) instance is stale — reset it.
+  try {
+    const redis = getRedis();
+    await redis.del('online_users');
+    await redis.del('user_channels');
+  } catch (err) {
+    logger.warn({ err }, 'Failed to reset presence state on startup');
+  }
+
   app.get('/ws', { websocket: true }, async (socket, request) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
     const token = url.searchParams.get('token');
@@ -181,7 +191,7 @@ export async function wsRoutes(app: FastifyInstance) {
           return;
         }
         if (msg.type === 'direct_ptt.end') {
-          await handleDirectPttEnd(msg);
+          await handleDirectPttEnd(msg, payload);
           return;
         }
 
@@ -203,6 +213,7 @@ export async function wsRoutes(app: FastifyInstance) {
         redis.srem('online_users', payload.sub);
         redis.hdel('user_channels', payload.sub);
         broadcastToAll({ type: 'user.offline', userId: payload.sub }, payload.sub);
+        await cleanupUserDirectCalls(payload.sub);
       }
 
       handler.cleanup();
@@ -323,10 +334,22 @@ async function handleDirectPttCall(msg: any, payload: { sub: string; displayName
   }
 }
 
-async function handleDirectPttEnd(msg: any): Promise<void> {
+async function handleDirectPttEnd(msg: any, payload: { sub: string; displayName: string; role: string }): Promise<void> {
   const { callId, channelId } = msg;
   if (!channelId) return;
 
+  // Only allow members of the call channel to end it
+  const sql = getDb();
+  const [member] = await sql`
+    SELECT user_id FROM channel_members
+    WHERE channel_id = ${channelId}::uuid AND user_id = ${payload.sub}::uuid
+  `;
+  if (!member) return;
+
+  await endDirectCall(channelId, callId);
+}
+
+async function endDirectCall(channelId: string, callId?: string): Promise<void> {
   // Notify all channel members that the call ended
   broadcastToChannel(channelId, {
     type: 'direct_ptt.ended',
@@ -352,7 +375,33 @@ async function handleDirectPttEnd(msg: any): Promise<void> {
   }
 
   // Clean up the active call tracker
-  if (callId) activeCalls.delete(callId);
+  if (callId) {
+    activeCalls.delete(callId);
+  } else {
+    for (const [id, ch] of activeCalls) {
+      if (ch === channelId) activeCalls.delete(id);
+    }
+  }
+}
+
+// If a user disconnects without sending direct_ptt.end, tear down any
+// direct-call channels they were a member of so they don't linger forever.
+async function cleanupUserDirectCalls(userId: string): Promise<void> {
+  if (directCallChannels.size === 0) return;
+  const sql = getDb();
+  for (const channelId of [...directCallChannels]) {
+    try {
+      const [member] = await sql`
+        SELECT user_id FROM channel_members
+        WHERE channel_id = ${channelId}::uuid AND user_id = ${userId}::uuid
+      `;
+      if (member) {
+        await endDirectCall(channelId);
+      }
+    } catch (err) {
+      logger.warn({ err, channelId }, 'Failed to clean up direct call on disconnect');
+    }
+  }
 }
 
 async function handleChatMessage(msg: any, payload: { sub: string; displayName: string }): Promise<void> {

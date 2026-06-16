@@ -48,7 +48,7 @@ send_alert() {
 }
 
 # Check API health
-API_STATUS=$(check_service "API" "http://localhost:3000/health")
+API_STATUS=$(check_service "API" "http://localhost:3003/health")
 NGINX_STATUS=$(check_service "Nginx" "http://localhost/health")
 PG_STATUS=$(check_service "Postgres" "http://localhost:5432" 2>/dev/null || echo "nocheck")
 

@@ -103,6 +103,10 @@ class AuthProvider extends ChangeNotifier {
       final reProfile = await _repo.getProfile();
       if (reProfile.isSuccess) {
         _user = reProfile.valueOrNull;
+        final newToken = await _api.accessToken;
+        if (newToken != null) {
+          await _ws.connect(newToken);
+        }
         notifyListeners();
         return;
       }

@@ -101,6 +101,11 @@ class _VoxRelayAppState extends State<VoxRelayApp> {
             conversationId: event.data['conversationId'] as String?,
           );
         });
+      } else if (event.type == 'direct_ptt.calling') {
+        final channelId = event.data['channelId'] as String?;
+        if (channelId != null && channelId.isNotEmpty) {
+          _navigatorKey.currentState?.pushNamed('/ptt', arguments: channelId);
+        }
       } else if (event.type == 'direct_ptt.ended' || event.type == 'call:end') {
         setState(() => _incomingCall = null);
       }

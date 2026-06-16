@@ -24,6 +24,8 @@ class AudioService {
   Future<void> enableWakelock() => WakelockPlus.enable();
   Future<void> disableWakelock() => WakelockPlus.disable();
 
+  Stream<void> get onComplete => _player.onPlayerComplete;
+
   Future<String> get _recordingsDir async {
     final dir = await getApplicationDocumentsDirectory();
     final recDir = Directory('${dir.path}/recordings');

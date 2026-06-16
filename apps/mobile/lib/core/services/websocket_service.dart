@@ -169,8 +169,8 @@ class WsService {
     send('chat:read', {'conversationId': conversationId});
   }
 
-  void startCall(String userId) {
-    send('direct_ptt.call', {'targetUserId': userId});
+  void startCall(String userId, String conversationId) {
+    send('direct_ptt.call', {'targetUserId': userId, 'conversationId': conversationId});
   }
 
   void acceptCall(String callId) {
@@ -208,6 +208,10 @@ class WsService {
 
   void requestProducers(String channelId) {
     send('producers.list', {'channelId': channelId});
+  }
+
+  void getOnlineUsers() {
+    send('get_online_users', {});
   }
 
   void sendConsume(String channelId, String transportId, String producerId, Map<String, dynamic> rtpCapabilities) {

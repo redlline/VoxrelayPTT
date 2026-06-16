@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
 import '../../../core/providers/channel_provider.dart';
@@ -8,6 +10,7 @@ import '../../../core/providers/ptt_provider.dart';
 import '../../../core/providers/media_controls_provider.dart';
 import '../../../core/providers/video_source_provider.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/audio_service.dart';
 import '../../../shared/app_drawer.dart';
 import '../../../shared/ptt_button.dart';
 import '../../../shared/speaking_wave.dart';
@@ -26,6 +29,9 @@ class _PttScreenState extends State<PttScreen> {
   bool _showRecordings = false;
   List<Map<String, dynamic>> _recordings = [];
   bool _recordingsLoading = false;
+  String? _playingRecordingId;
+  String? _loadingRecordingId;
+  StreamSubscription? _audioCompleteSub;
 
   @override
   void initState() {
@@ -33,7 +39,16 @@ class _PttScreenState extends State<PttScreen> {
     _selectedChannelId = widget.channelId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChannelProvider>().loadChannels();
+      _audioCompleteSub = context.read<AudioService>().onComplete.listen((_) {
+        if (mounted) setState(() => _playingRecordingId = null);
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _audioCompleteSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -522,6 +537,9 @@ class _PttScreenState extends State<PttScreen> {
                         itemCount: _recordings.length,
                         itemBuilder: (context, index) {
                           final r = _recordings[index];
+                          final id = r['id']?.toString();
+                          final isPlaying = id != null && _playingRecordingId == id;
+                          final isLoading = id != null && _loadingRecordingId == id;
                           return Container(
                             margin: const EdgeInsets.only(bottom: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -531,7 +549,20 @@ class _PttScreenState extends State<PttScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.play_circle, color: AppTheme.primary, size: 18),
+                                GestureDetector(
+                                  onTap: () => _playRecording(r),
+                                  child: isLoading
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
+                                        )
+                                      : Icon(
+                                          isPlaying ? Icons.stop_circle : Icons.play_circle,
+                                          color: AppTheme.primary,
+                                          size: 18,
+                                        ),
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -563,6 +594,35 @@ class _PttScreenState extends State<PttScreen> {
       if (mounted) setState(() { _recordings = recs; _recordingsLoading = false; });
     } catch (_) {
       if (mounted) setState(() { _recordings = []; _recordingsLoading = false; });
+    }
+  }
+
+  Future<void> _playRecording(Map<String, dynamic> r) async {
+    final id = r['id']?.toString();
+    if (id == null) return;
+    final audio = Provider.of<AudioService>(context, listen: false);
+
+    if (_playingRecordingId == id) {
+      await audio.stopPlayback();
+      if (mounted) setState(() => _playingRecordingId = null);
+      return;
+    }
+
+    final filePath = r['file_path'] as String?;
+    if (filePath == null) return;
+
+    setState(() => _loadingRecordingId = id);
+    try {
+      final api = Provider.of<ApiService>(context, listen: false);
+      final bytes = await api.getRecordingAudio(filePath);
+      final ext = filePath.contains('.') ? filePath.split('.').last : 'ogg';
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/recording_$id.$ext');
+      await file.writeAsBytes(bytes);
+      await audio.playAudio(file.path);
+      if (mounted) setState(() { _playingRecordingId = id; _loadingRecordingId = null; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingRecordingId = null);
     }
   }
 

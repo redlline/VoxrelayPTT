@@ -27,8 +27,6 @@ services:
     build:
       context: ../../services/auth-service
       dockerfile: Dockerfile
-    ports:
-      - "3001:3001"
     environment:
       PORT: 3001
       DB_HOST: pgbouncer
@@ -38,6 +36,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     depends_on:
@@ -55,8 +54,6 @@ services:
     build:
       context: ../../services/channel-svc
       dockerfile: Dockerfile
-    ports:
-      - "3002:3002"
     environment:
       PORT: 3002
       DB_HOST: pgbouncer
@@ -66,6 +63,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     depends_on:
@@ -85,7 +83,7 @@ services:
       dockerfile: services/media-sfu/Dockerfile
       target: production
     ports:
-      - "3003:3003"
+      - "127.0.0.1:3003:3003"
       - "${MEDIASOUP_MIN_PORT:-40000}-${MEDIASOUP_MAX_PORT:-40100}:${MEDIASOUP_MIN_PORT:-40000}-${MEDIASOUP_MAX_PORT:-40100}/udp"
       - "${MEDIASOUP_MIN_PORT:-40000}-${MEDIASOUP_MAX_PORT:-40100}:${MEDIASOUP_MIN_PORT:-40000}-${MEDIASOUP_MAX_PORT:-40100}/tcp"
     healthcheck:
@@ -104,6 +102,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       MEDIASOUP_LISTEN_IP: 0.0.0.0
       MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
@@ -140,8 +139,6 @@ services:
 
   pgbouncer:
     image: edoburu/pgbouncer:latest
-    ports:
-      - "${PGBOUNCER_PORT:-6432}:5432"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -164,8 +161,6 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    ports:
-      - "${DB_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: voxrelay
       POSTGRES_USER: voxrelay
@@ -184,13 +179,11 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -200,9 +193,6 @@ services:
 
   minio:
     image: minio/minio:latest
-    ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
@@ -230,13 +220,13 @@ services:
     command:
       - -n
       - --log-file=stdout
-      - --realm=voxrelay.local
+      - --realm=${TURN_REALM:-voxrelay.local}
       - --server-name=voxrelay-turn
       - --lt-cred-mech
-      - --user=voxrelay:voxrelay_turn
+      - --user=${TURN_USERNAME:-voxrelay}:${TURN_PASSWORD:-voxrelay_turn}
       - --listening-ip=0.0.0.0
-      - --external-ip=119.235.120.28
-      - --relay-ip=119.235.120.28
+      - --external-ip=${TURN_EXTERNAL_IP:-119.235.120.28}
+      - --relay-ip=${TURN_EXTERNAL_IP:-119.235.120.28}
       - --listening-port=3478
       - --tls-listening-port=5349
       - --min-port=49200

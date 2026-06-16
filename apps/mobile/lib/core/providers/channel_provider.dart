@@ -14,6 +14,7 @@ class ChannelProvider extends ChangeNotifier {
   List<Channel> _channels = [];
   List<Channel> _myChannels = [];
   final List<User> _members = [];
+  final Set<String> _onlineUserIds = {};
   bool _isLoading = false;
   String? _error;
   String? _activeSpeakerId;
@@ -30,7 +31,10 @@ class ChannelProvider extends ChangeNotifier {
 
   void init() {
     _wsSubscription = _ws.events.listen(_handleWsEvent);
+    _ws.getOnlineUsers();
   }
+
+  bool isUserOnline(String userId) => _onlineUserIds.contains(userId);
 
   void _handleWsEvent(WsEvent event) {
     switch (event.type) {
@@ -44,11 +48,41 @@ class ChannelProvider extends ChangeNotifier {
       case 'channel.user_left':
         _memberLeft(event.data);
         break;
+      case 'online_users':
+        _onlineUserIds
+          ..clear()
+          ..addAll((event.data['userIds'] as List<dynamic>?)?.cast<String>() ?? const []);
+        _applyOnlineStatus();
+        notifyListeners();
+        break;
+      case 'user.online':
+        final userId = event.data['userId'] as String?;
+        if (userId != null) {
+          _onlineUserIds.add(userId);
+          _applyOnlineStatus();
+          notifyListeners();
+        }
+        break;
+      case 'user.offline':
+        final userId = event.data['userId'] as String?;
+        if (userId != null) {
+          _onlineUserIds.remove(userId);
+          _applyOnlineStatus();
+          notifyListeners();
+        }
+        break;
+    }
+  }
+
+  void _applyOnlineStatus() {
+    for (final m in _members) {
+      m.isOnline = _onlineUserIds.contains(m.id);
     }
   }
 
   void _memberJoined(Map<String, dynamic> data) {
     final member = User.fromJson(data);
+    member.isOnline = _onlineUserIds.contains(member.id);
     _members.add(member);
     notifyListeners();
   }
@@ -82,6 +116,7 @@ class ChannelProvider extends ChangeNotifier {
       _members
         ..clear()
         ..addAll(result.valueOrNull!);
+      _applyOnlineStatus();
       notifyListeners();
     }
   }

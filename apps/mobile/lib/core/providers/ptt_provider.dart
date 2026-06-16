@@ -123,6 +123,8 @@ class PttProvider extends ChangeNotifier {
         }
         break;
       case 'new-consumer':
+        _consumeNewProducer(event.data);
+        break;
       case 'producers':
         _consumeProducers(event.data);
         break;
@@ -150,6 +152,16 @@ class PttProvider extends ChangeNotifier {
         }
         _ms.resumeProducer();
       }
+    } catch (_) {}
+  }
+
+  Future<void> _consumeNewProducer(Map<String, dynamic> data) async {
+    if (_activeChannelId == null) return;
+    if (data['channelId'] != null && data['channelId'] != _activeChannelId) return;
+    final producerId = data['producerId'] as String?;
+    if (producerId == null) return;
+    try {
+      await _ms.createConsumer(_activeChannelId!, producerId);
     } catch (_) {}
   }
 
